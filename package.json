@@ -1,0 +1,50 @@
+{
+  "name": "inkforge",
+  "productName": "InkForge",
+  "version": "1.0.0",
+  "description": "Read your own PDF and EPUB library, fully offline.",
+  "main": "electron/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --mac dmg --win nsis --win portable --linux AppImage"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.inkforge.app",
+    "productName": "InkForge",
+    "files": [
+      "electron/**/*",
+      "index.html",
+      "favicon.svg",
+      "css/**/*",
+      "js/**/*",
+      "lib/**/*"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.reference"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Office"
+    }
+  }
+}
