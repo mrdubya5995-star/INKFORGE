@@ -720,19 +720,17 @@ async function requestPersistentStorage() {
 
 // ---------------- Download page (website only) ----------------
 const RELEASE_VERSION = '1.0.0';
-const RELEASE_BASE = 'https://github.com/mrdubya5995-star/InkForge/releases/download/v1.0.0/';
+const RELEASE_BASE = 'https://github.com/mrdubya5995-star/INKFORGE/releases/download/v1.0.0/';
 const DOWNLOAD_LINKS = {
-  mac: RELEASE_BASE + 'InkForge-macOS.dmg',
-  windows: RELEASE_BASE + 'InkForge-Setup-Windows.exe',
-  linux: RELEASE_BASE + 'InkForge-Linux.AppImage'
+  mac: { url: RELEASE_BASE + 'InkForge-macOS.dmg', size: '97.2 MB' },
+  windows: { url: RELEASE_BASE + 'InkForge-Setup-Windows.exe', size: '80.6 MB' },
+  linux: { url: RELEASE_BASE + 'InkForge-Linux.AppImage', size: '102.7 MB' }
 };
 
 function setupDownloadLinks() {
-  document.getElementById('download-mac').href = DOWNLOAD_LINKS.mac;
-  document.getElementById('download-windows').href = DOWNLOAD_LINKS.windows;
-  document.getElementById('download-linux').href = DOWNLOAD_LINKS.linux;
   ['mac', 'windows', 'linux'].forEach(p => {
-    document.getElementById(`download-${p}-version`).textContent = `v${RELEASE_VERSION}`;
+    document.getElementById(`download-${p}`).href = DOWNLOAD_LINKS[p].url;
+    document.getElementById(`download-${p}-version`).textContent = `v${RELEASE_VERSION} · ${DOWNLOAD_LINKS[p].size}`;
   });
 }
 
