@@ -231,19 +231,57 @@ button {
 
 /* ============ SHELVES / CARDS ============ */
 .shelf { padding: 28px 56px; position: relative; }
-.shelf-title { font-family: var(--font-display); font-size: 19px; font-weight: 400; letter-spacing: 0.4px; margin: 0 0 16px; }
+.shelf-header { display: flex; align-items: baseline; gap: 16px; margin: 0 0 16px; }
+.shelf-title { font-family: var(--font-display); font-size: 19px; font-weight: 400; letter-spacing: 0.4px; margin: 0; }
+.view-all-btn {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--red);
+  padding: 4px 2px;
+  border-bottom: 1.5px solid transparent;
+}
+.view-all-btn:hover { border-bottom-color: var(--red); }
 .shelf-row {
   display: flex;
   gap: 16px;
   overflow-x: auto;
   padding-bottom: 10px;
-  scrollbar-width: thin;
+  scrollbar-width: none;
 }
+.shelf-row::-webkit-scrollbar { display: none; }
 .shelf-row:empty::before {
   content: attr(data-empty);
   color: var(--text-muted);
   font-size: 14px;
 }
+
+/* Custom always-visible scroll indicator, since the native scrollbar above
+   is hidden — lets people see there's more to scroll through and drag
+   directly instead of having to guess or use a trackpad/wheel. */
+.shelf-scrollbar {
+  position: relative;
+  height: 6px;
+  margin-top: 2px;
+  border: 1.5px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.shelf-scrollbar-thumb {
+  position: absolute;
+  top: -1.5px;
+  bottom: -1.5px;
+  left: 0;
+  background: var(--red);
+  border-radius: 4px;
+  cursor: grab;
+  min-width: 24px;
+}
+.shelf-scrollbar-thumb:active { cursor: grabbing; }
+
+/* ============ SECTION "VIEW ALL" PAGE ============ */
+#view-section-all { padding: 40px 56px; }
+.section-all-title { font-family: var(--font-display); font-size: 30px; font-weight: 400; letter-spacing: 0.4px; margin: 0 0 26px; }
+.grid-wrap { flex-wrap: wrap; overflow-x: visible; }
 
 .card {
   position: relative;
@@ -389,7 +427,6 @@ body.select-mode .card-checkbox { display: flex; }
   transition: border-color 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 .download-card:hover { border-color: var(--red); transform: translateY(-3px); box-shadow: var(--shadow); }
-.download-card-icon { width: 52px; height: 52px; color: var(--red); margin-bottom: 6px; }
 .download-card-platform { font-family: var(--font-display); font-size: 20px; letter-spacing: 0.3px; }
 .download-card-label { font-size: 13.5px; color: var(--text-muted); line-height: 1.4; }
 .download-card-version { font-size: 12.5px; font-weight: 700; color: var(--red); margin-top: 4px; }

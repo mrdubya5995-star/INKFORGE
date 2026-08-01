@@ -158,7 +158,7 @@ function switchView(viewId) {
   // (rather than patching each caller) guarantees the hero/shelves never show
   // stale progress, lastOpened, or favorite state.
   const enteringHome = viewId === 'view-home' && currentView !== 'view-home';
-  ['view-home', 'view-detail', 'view-reader', 'view-search', 'view-settings', 'view-download'].forEach(id => {
+  ['view-home', 'view-detail', 'view-reader', 'view-search', 'view-settings', 'view-download', 'view-section-all'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.hidden = (id !== viewId);
   });
@@ -277,13 +277,19 @@ function renderHero() {
   document.getElementById('hero-start-btn').addEventListener('click', () => startReading(heroBook.id));
 }
 
+const SHELF_CAP = 20;
+const SECTION_CONFIG = {
+  'section-library': { title: 'Full Library', getList: bks => [...bks].sort((a, b) => a.title.localeCompare(b.title)) },
+  'section-recent': { title: 'Recently Uploaded', getList: bks => [...bks].sort((a, b) => b.addedDate - a.addedDate) },
+  'section-favorites': { title: 'Favorites', getList: bks => bks.filter(b => b.favorite) },
+  'section-finished': { title: 'Finished', getList: bks => bks.filter(b => b.finished) },
+  'section-unfinished': { title: 'Unfinished', getList: bks => bks.filter(b => !b.finished && b.progress > 0) }
+};
+
 function computeSections() {
-  return {
-    'section-recent': [...books].sort((a, b) => b.addedDate - a.addedDate),
-    'section-favorites': books.filter(b => b.favorite),
-    'section-finished': books.filter(b => b.finished),
-    'section-unfinished': books.filter(b => !b.finished && b.progress > 0)
-  };
+  const result = {};
+  for (const [id, cfg] of Object.entries(SECTION_CONFIG)) result[id] = cfg.getList(books);
+  return result;
 }
 
 function renderShelves() {
@@ -291,9 +297,92 @@ function renderShelves() {
   for (const [id, list] of Object.entries(sections)) {
     const row = document.querySelector(`#${id} .shelf-row`);
     row.innerHTML = '';
-    list.forEach(book => row.appendChild(createCard(book)));
+    list.slice(0, SHELF_CAP).forEach(book => row.appendChild(createCard(book)));
+
+    const viewAllBtn = document.querySelector(`#${id} .view-all-btn`);
+    if (viewAllBtn) viewAllBtn.hidden = list.length <= SHELF_CAP;
+
+    updateShelfScrollbar(id);
   }
 }
+
+// ---------------- Shelf scrollbars ----------------
+// The native scrollbar on each shelf-row is hidden (see CSS) in favor of this
+// always-visible, draggable indicator, so people can see there's more to
+// scroll through without hovering/guessing, and can jump around directly.
+function updateShelfScrollbar(sectionId) {
+  const row = document.querySelector(`#${sectionId} .shelf-row`);
+  const track = document.querySelector(`#${sectionId} .shelf-scrollbar`);
+  const thumb = track ? track.querySelector('.shelf-scrollbar-thumb') : null;
+  if (!row || !track || !thumb) return;
+  const overflowing = row.scrollWidth > row.clientWidth + 1;
+  track.hidden = !overflowing;
+  if (!overflowing) return;
+  const thumbWidthPct = Math.max((row.clientWidth / row.scrollWidth) * 100, 6);
+  const maxThumbLeftPct = 100 - thumbWidthPct;
+  const scrollableDist = row.scrollWidth - row.clientWidth;
+  const thumbLeftPct = scrollableDist > 0 ? (row.scrollLeft / scrollableDist) * maxThumbLeftPct : 0;
+  thumb.style.width = thumbWidthPct + '%';
+  thumb.style.left = thumbLeftPct + '%';
+}
+
+function setupShelfScrollbars() {
+  Object.keys(SECTION_CONFIG).forEach(id => {
+    const row = document.querySelector(`#${id} .shelf-row`);
+    const track = document.querySelector(`#${id} .shelf-scrollbar`);
+    const thumb = track ? track.querySelector('.shelf-scrollbar-thumb') : null;
+    if (!row || !track || !thumb) return;
+
+    row.addEventListener('scroll', () => updateShelfScrollbar(id));
+
+    let dragging = false;
+    let dragStartX = 0;
+    let dragStartScrollLeft = 0;
+
+    thumb.addEventListener('pointerdown', (e) => {
+      dragging = true;
+      dragStartX = e.clientX;
+      dragStartScrollLeft = row.scrollLeft;
+      thumb.setPointerCapture(e.pointerId);
+      e.preventDefault();
+    });
+    thumb.addEventListener('pointermove', (e) => {
+      if (!dragging) return;
+      const draggableTrack = Math.max(track.clientWidth - thumb.offsetWidth, 1);
+      const scrollableDist = row.scrollWidth - row.clientWidth;
+      const deltaScroll = ((e.clientX - dragStartX) / draggableTrack) * scrollableDist;
+      row.scrollLeft = Math.max(0, Math.min(scrollableDist, dragStartScrollLeft + deltaScroll));
+    });
+    thumb.addEventListener('pointerup', () => { dragging = false; });
+    thumb.addEventListener('pointercancel', () => { dragging = false; });
+
+    track.addEventListener('click', (e) => {
+      if (e.target === thumb) return;
+      const rect = track.getBoundingClientRect();
+      const scrollableDist = row.scrollWidth - row.clientWidth;
+      row.scrollLeft = ((e.clientX - rect.left) / rect.width) * scrollableDist;
+    });
+  });
+
+  window.addEventListener('resize', () => {
+    Object.keys(SECTION_CONFIG).forEach(id => updateShelfScrollbar(id));
+  });
+}
+
+// ---------------- Section "View All" page ----------------
+document.querySelectorAll('.view-all-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const cfg = SECTION_CONFIG[btn.dataset.viewAll];
+    if (!cfg) return;
+    showLoading();
+    const grid = document.getElementById('section-all-grid');
+    grid.innerHTML = '';
+    cfg.getList(books).forEach(book => grid.appendChild(createCard(book)));
+    document.getElementById('section-all-title').textContent = cfg.title;
+    switchView('view-section-all');
+    await hideLoading();
+  });
+});
 
 function createCard(book) {
   const card = document.createElement('div');
@@ -719,8 +808,8 @@ async function requestPersistentStorage() {
 }
 
 // ---------------- Download page (website only) ----------------
-const RELEASE_VERSION = '1.0.0';
-const RELEASE_BASE = 'https://github.com/mrdubya5995-star/INKFORGE/releases/download/v1.0.0/';
+const RELEASE_VERSION = '1.1.0';
+const RELEASE_BASE = 'https://github.com/mrdubya5995-star/INKFORGE/releases/download/v1.1.0/';
 const DOWNLOAD_LINKS = {
   mac: { url: RELEASE_BASE + 'InkForge-macOS.dmg', size: '97.2 MB' },
   windows: { url: RELEASE_BASE + 'InkForge-Setup-Windows.exe', size: '80.6 MB' },
@@ -751,6 +840,7 @@ function applyElectronRestrictions() {
     b.classList.toggle('active', b.dataset.defTheme === settings.defaultTheme));
   setupDownloadLinks();
   applyElectronRestrictions();
+  setupShelfScrollbars();
   await refreshBooks();
   requestPersistentStorage();
 })();
