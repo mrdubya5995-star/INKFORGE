@@ -277,13 +277,41 @@ function renderHero() {
   document.getElementById('hero-start-btn').addEventListener('click', () => startReading(heroBook.id));
 }
 
+// Organization: titles are compared letter-run by letter-run and
+// number-run by number-run, in order, rather than as plain strings — so
+// "A0" < "A1" < "B0" (A before B beats 0 vs 1), and critically so a run
+// like "Ch.9" sorts before "Ch.10" (9 < 10 as numbers, not as the strings
+// "9" > "1..."). This is what plain localeCompare / naive alphabetical
+// sort gets wrong for anything with chapter/volume numbers in the title.
+function naturalCompare(a, b) {
+  const tokenize = s => String(s).match(/(\d+)|(\D+)/g) || [];
+  const aParts = tokenize(a);
+  const bParts = tokenize(b);
+  const len = Math.max(aParts.length, bParts.length);
+  for (let i = 0; i < len; i++) {
+    const ap = aParts[i] ?? '';
+    const bp = bParts[i] ?? '';
+    const aIsNum = /^\d+$/.test(ap);
+    const bIsNum = /^\d+$/.test(bp);
+    if (aIsNum && bIsNum) {
+      const diff = parseInt(ap, 10) - parseInt(bp, 10);
+      if (diff !== 0) return diff;
+    } else {
+      const cmp = ap.localeCompare(bp, undefined, { sensitivity: 'base' });
+      if (cmp !== 0) return cmp;
+    }
+  }
+  return 0;
+}
+function byTitle(bks) { return [...bks].sort((a, b) => naturalCompare(a.title, b.title)); }
+
 const SHELF_CAP = 20;
 const SECTION_CONFIG = {
-  'section-library': { title: 'Full Library', getList: bks => [...bks].sort((a, b) => a.title.localeCompare(b.title)) },
+  'section-library': { title: 'Full Library', getList: bks => byTitle(bks) },
   'section-recent': { title: 'Recently Uploaded', getList: bks => [...bks].sort((a, b) => b.addedDate - a.addedDate) },
-  'section-favorites': { title: 'Favorites', getList: bks => bks.filter(b => b.favorite) },
-  'section-finished': { title: 'Finished', getList: bks => bks.filter(b => b.finished) },
-  'section-unfinished': { title: 'Unfinished', getList: bks => bks.filter(b => !b.finished && b.progress > 0) }
+  'section-favorites': { title: 'Favorites', getList: bks => byTitle(bks.filter(b => b.favorite)) },
+  'section-finished': { title: 'Finished', getList: bks => byTitle(bks.filter(b => b.finished)) },
+  'section-unfinished': { title: 'Unfinished', getList: bks => byTitle(bks.filter(b => !b.finished && b.progress > 0)) }
 };
 
 function computeSections() {
@@ -679,7 +707,7 @@ els['search-input'].addEventListener('input', (e) => {
   const q = e.target.value.trim().toLowerCase();
   els['search-results'].innerHTML = '';
   if (!q) { els['search-results'].dataset.empty = 'Start typing to search your library.'; return; }
-  const matches = books.filter(b => b.title.toLowerCase().includes(q));
+  const matches = byTitle(books.filter(b => b.title.toLowerCase().includes(q)));
   els['search-results'].dataset.empty = 'No books match your search.';
   matches.forEach(b => els['search-results'].appendChild(createCard(b)));
 });
@@ -808,8 +836,8 @@ async function requestPersistentStorage() {
 }
 
 // ---------------- Download page (website only) ----------------
-const RELEASE_VERSION = '1.1.0';
-const RELEASE_BASE = 'https://github.com/mrdubya5995-star/INKFORGE/releases/download/v1.1.0/';
+const RELEASE_VERSION = '1.2.0';
+const RELEASE_BASE = 'https://github.com/mrdubya5995-star/INKFORGE/releases/download/v1.2.0/';
 const DOWNLOAD_LINKS = {
   mac: { url: RELEASE_BASE + 'InkForge-macOS.dmg', size: '97.2 MB' },
   windows: { url: RELEASE_BASE + 'InkForge-Setup-Windows.exe', size: '80.6 MB' },

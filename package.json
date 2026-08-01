@@ -1,7 +1,7 @@
 {
   "name": "inkforge",
   "productName": "InkForge",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Read your own PDF and EPUB library, fully offline.",
   "main": "electron/main.js",
   "private": true,
