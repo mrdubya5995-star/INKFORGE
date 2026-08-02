@@ -487,10 +487,14 @@ body.select-mode .card-checkbox { display: flex; }
 .theme-btn.active { background: var(--red); color: #fff; }
 .finish-btn { margin-left: 8px; }
 
+.zoom-controls { display: flex; align-items: center; gap: 4px; border: 1px solid var(--border); border-radius: 8px; padding: 2px 8px; }
+.zoom-level-label { font-size: 12.5px; font-weight: 700; color: var(--text-muted); min-width: 36px; text-align: center; }
+.reader-btn:disabled { opacity: 0.35; pointer-events: none; }
+
 .reader-body { flex: 1; position: relative; overflow: hidden; display: flex; align-items: stretch; }
 .reader-surface { flex: 1; overflow: auto; display: flex; align-items: center; justify-content: center; }
-.reader-surface.vertical-mode { display: block; overflow-y: auto; }
-.reader-surface canvas { box-shadow: var(--shadow); margin: 20px auto; display: block; max-width: 100%; }
+.reader-surface.vertical-mode { display: block; overflow: auto; }
+.reader-surface canvas { box-shadow: var(--shadow); margin: 20px auto; display: block; }
 .reader-surface.vertical-mode canvas { margin: 12px auto; }
 
 .reader-nav-arrow {

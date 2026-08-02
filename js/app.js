@@ -23,7 +23,7 @@ const els = {};
   'dropzone', 'file-input', 'search-input', 'search-results', 'library-stats',
   'detail-cover', 'detail-title', 'detail-meta', 'detail-progress', 'detail-favorite', 'detail-start',
   'reader-title', 'reader-progress-fill', 'reader-progress-label', 'finish-btn',
-  'orientation-toggle', 'view-reader'
+  'orientation-toggle', 'view-reader', 'zoom-in-btn', 'zoom-out-btn', 'zoom-level-label'
 ].forEach(id => { els[id] = document.getElementById(id); });
 
 function loadSettings() {
@@ -661,6 +661,7 @@ async function startReading(id) {
     }
   });
 
+  updateZoomUI();
   await hideLoading();
 }
 
@@ -671,6 +672,18 @@ els['orientation-toggle'].addEventListener('click', async () => {
   if (currentReaderBookId) InkDB.updateBook(currentReaderBookId, { readingOrientation: next });
   await hideLoading();
 });
+
+function updateZoomUI() {
+  const level = InkReader.getZoomLevel();
+  els['zoom-level-label'].textContent = Math.round(level * 100) + '%';
+  els['zoom-out-btn'].disabled = level <= 0.5;
+  els['zoom-in-btn'].disabled = level >= 2.5;
+}
+
+// Zoom is a fast, frequently-clicked adjustment (unlike orientation/theme,
+// which change rarely) — no loading overlay, it should feel instant.
+els['zoom-in-btn'].addEventListener('click', () => { InkReader.zoomIn(); updateZoomUI(); });
+els['zoom-out-btn'].addEventListener('click', () => { InkReader.zoomOut(); updateZoomUI(); });
 
 document.querySelectorAll('.theme-btn').forEach(btn => btn.addEventListener('click', () => {
   const t = btn.dataset.theme;
@@ -836,8 +849,8 @@ async function requestPersistentStorage() {
 }
 
 // ---------------- Download page (website only) ----------------
-const RELEASE_VERSION = '1.2.0';
-const RELEASE_BASE = 'https://github.com/mrdubya5995-star/INKFORGE/releases/download/v1.2.0/';
+const RELEASE_VERSION = '1.3.0';
+const RELEASE_BASE = 'https://github.com/mrdubya5995-star/INKFORGE/releases/download/v1.3.0/';
 const DOWNLOAD_LINKS = {
   mac: { url: RELEASE_BASE + 'InkForge-macOS.dmg', size: '97.2 MB' },
   windows: { url: RELEASE_BASE + 'InkForge-Setup-Windows.exe', size: '80.6 MB' },

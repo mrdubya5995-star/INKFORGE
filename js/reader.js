@@ -9,6 +9,14 @@ const InkReader = (() => {
   let theme = 'light';
   let surfaceEl = null;
 
+  // zoom state — a multiplier on top of the "fit to container" scale for
+  // PDF, and a font-size percentage for EPUB (its pages reflow rather than
+  // being fixed bitmaps, so scaling text is the equivalent of zoom there).
+  let zoomLevel = 1;
+  const ZOOM_MIN = 0.5;
+  const ZOOM_MAX = 2.5;
+  const ZOOM_STEP = 0.1;
+
   // pdf state
   let pdfDoc = null;
   let pageNum = 1;
@@ -45,6 +53,7 @@ const InkReader = (() => {
     surfaceEl.innerHTML = '';
     orientation = opts.orientation || 'horizontal';
     theme = opts.theme || 'light';
+    zoomLevel = 1;
     callbacks = opts.callbacks || {};
     mode = book.format;
 
@@ -80,8 +89,9 @@ const InkReader = (() => {
     const page = await pdfDoc.getPage(pageNum);
     const containerWidth = surfaceEl.clientWidth * 0.9;
     const baseViewport = page.getViewport({ scale: 1 });
-    const scale = Math.min((containerWidth) / baseViewport.width, (surfaceEl.clientHeight * 0.92) / baseViewport.height);
-    const viewport = page.getViewport({ scale: scale > 0 ? scale : 1 });
+    const fitScale = Math.min((containerWidth) / baseViewport.width, (surfaceEl.clientHeight * 0.92) / baseViewport.height);
+    const scale = (fitScale > 0 ? fitScale : 1) * zoomLevel;
+    const viewport = page.getViewport({ scale });
     const canvas = document.createElement('canvas');
     surfaceEl.appendChild(canvas);
     await renderPageToCanvas(page, viewport, canvas);
@@ -96,15 +106,16 @@ const InkReader = (() => {
 
     const firstPage = await pdfDoc.getPage(1);
     const baseViewport = firstPage.getViewport({ scale: 1 });
-    const width = surfaceEl.clientWidth * 0.9;
-    const scale = width / baseViewport.width;
+    const fitWidth = surfaceEl.clientWidth * 0.9;
+    const scale = (fitWidth / baseViewport.width) * zoomLevel;
+    const renderedWidth = baseViewport.width * scale;
 
     const placeholders = [];
     for (let i = 1; i <= pageCount; i++) {
       const div = document.createElement('div');
       div.className = 'pdf-page-placeholder';
       div.dataset.pageNum = String(i);
-      div.style.width = width + 'px';
+      div.style.width = renderedWidth + 'px';
       div.style.height = (baseViewport.height * scale) + 'px';
       div.style.margin = '12px auto';
       div.style.background = '#fafafa';
@@ -187,6 +198,7 @@ const InkReader = (() => {
     epubRendition.themes.register('sepia', { body: { background: '#f4ecd8', color: '#3a2f22' } });
     epubRendition.themes.register('dark', { body: { background: '#1a1a1a', color: '#eaeaea' } });
     epubRendition.themes.select(theme);
+    epubRendition.themes.fontSize(Math.round(zoomLevel * 100) + '%');
 
     epubRendition.on('relocated', (location) => {
       let fraction = 0;
@@ -225,6 +237,28 @@ const InkReader = (() => {
     if (mode === 'epub' && epubRendition) epubRendition.themes.select(theme);
   }
 
+  function applyZoom() {
+    if (mode === 'pdf') {
+      orientation === 'horizontal' ? renderPdfHorizontal() : renderPdfVertical();
+    } else if (mode === 'epub' && epubRendition) {
+      epubRendition.themes.fontSize(Math.round(zoomLevel * 100) + '%');
+    }
+  }
+
+  function zoomIn() {
+    zoomLevel = Math.min(ZOOM_MAX, Math.round((zoomLevel + ZOOM_STEP) * 100) / 100);
+    applyZoom();
+    return zoomLevel;
+  }
+
+  function zoomOut() {
+    zoomLevel = Math.max(ZOOM_MIN, Math.round((zoomLevel - ZOOM_STEP) * 100) / 100);
+    applyZoom();
+    return zoomLevel;
+  }
+
+  function getZoomLevel() { return zoomLevel; }
+
   function close() {
     if (pdfObserver) { pdfObserver.disconnect(); pdfObserver = null; }
     if (epubRendition) { epubRendition.destroy(); epubRendition = null; }
@@ -236,5 +270,5 @@ const InkReader = (() => {
 
   function getOrientation() { return orientation; }
 
-  return { open, next, prev, setOrientation, setTheme, close, getOrientation };
+  return { open, next, prev, setOrientation, setTheme, close, getOrientation, zoomIn, zoomOut, getZoomLevel };
 })();

@@ -103,12 +103,21 @@
       <path d="M12 3 C12 3 5.5 9 5.5 14 A6.5 6.5 0 0 0 18.5 14 C18.5 9 12 3 12 3 Z" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linejoin="round"/>
     </symbol>
 
+    <symbol id="icon-zoom-in" viewBox="0 0 24 24">
+      <circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="2.3"/>
+      <path d="M15.2 15.2 L20.4 20.4" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/>
+      <path d="M10.5 7.3 V13.7 M7.3 10.5 H13.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+    <symbol id="icon-zoom-out" viewBox="0 0 24 24">
+      <circle cx="10.5" cy="10.5" r="6" fill="none" stroke="currentColor" stroke-width="2.3"/>
+      <path d="M15.2 15.2 L20.4 20.4" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/>
+      <path d="M7.3 10.5 H13.7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+    </symbol>
+
     <symbol id="icon-flip" viewBox="0 0 24 24">
-      <path d="M12 2.2 V21.8 M2.2 12 H21.8" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
-      <path d="M8.2 6.2 L12 2.2 L15.8 6.2" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M8.2 17.8 L12 21.8 L15.8 17.8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M6.2 8.2 L2.2 12 L6.2 15.8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
-      <path d="M17.8 8.2 L21.8 12 L17.8 15.8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M3 12 H21" stroke="currentColor" stroke-width="2.3" stroke-linecap="round"/>
+      <path d="M8 6.2 L2.4 12 L8 17.8" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M16 6.2 L21.6 12 L16 17.8" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>
     </symbol>
 
     <symbol id="icon-book-empty" viewBox="0 0 24 24">
@@ -340,6 +349,11 @@
       <span id="reader-title" class="reader-title"></span>
 
       <div class="reader-toolbar-right">
+        <div class="zoom-controls">
+          <button id="zoom-out-btn" class="reader-btn" title="Zoom out"><svg class="icon"><use href="#icon-zoom-out"/></svg></button>
+          <span id="zoom-level-label" class="zoom-level-label">100%</span>
+          <button id="zoom-in-btn" class="reader-btn" title="Zoom in"><svg class="icon"><use href="#icon-zoom-in"/></svg></button>
+        </div>
         <div class="theme-switch">
           <button class="reader-btn theme-btn" data-theme="light" title="Light theme"><svg class="icon"><use href="#icon-sun"/></svg></button>
           <button class="reader-btn theme-btn" data-theme="sepia" title="Sepia theme"><svg class="icon"><use href="#icon-sepia"/></svg></button>
