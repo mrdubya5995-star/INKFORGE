@@ -22,6 +22,7 @@ const els = {};
   'loading-overlay', 'hero', 'home-actions', 'select-toggle', 'select-toolbar', 'select-count',
   'dropzone', 'file-input', 'search-input', 'search-results', 'library-stats',
   'detail-cover', 'detail-title', 'detail-meta', 'detail-progress', 'detail-favorite', 'detail-start',
+  'detail-rename-btn', 'detail-rename-row', 'detail-rename-input', 'detail-tags-list', 'tag-add-input',
   'reader-title', 'reader-progress-fill', 'reader-progress-label', 'finish-btn',
   'orientation-toggle', 'view-reader', 'zoom-in-btn', 'zoom-out-btn', 'zoom-level-label'
 ].forEach(id => { els[id] = document.getElementById(id); });
@@ -158,7 +159,7 @@ function switchView(viewId) {
   // (rather than patching each caller) guarantees the hero/shelves never show
   // stale progress, lastOpened, or favorite state.
   const enteringHome = viewId === 'view-home' && currentView !== 'view-home';
-  ['view-home', 'view-detail', 'view-reader', 'view-search', 'view-settings', 'view-download', 'view-section-all'].forEach(id => {
+  ['view-home', 'view-detail', 'view-reader', 'view-search', 'view-settings', 'view-download', 'view-section-all', 'view-tags'].forEach(id => {
     const el = document.getElementById(id);
     if (el) el.hidden = (id !== viewId);
   });
@@ -189,7 +190,7 @@ document.querySelectorAll('.sidebar-item[data-section]').forEach(btn => {
 });
 
 document.getElementById('logo-btn').addEventListener('click', async () => {
-  if (currentView === 'view-settings' || currentView === 'view-search' || currentView === 'view-download') {
+  if (currentView === 'view-settings' || currentView === 'view-search' || currentView === 'view-download' || currentView === 'view-tags') {
     showLoading();
     switchView('view-home');
     await hideLoading();
@@ -240,6 +241,7 @@ async function refreshBooks() {
   books = await InkDB.getAllBooks();
   renderHero();
   renderShelves();
+  renderSeriesSection();
   updateLibraryStats();
 }
 
@@ -334,14 +336,110 @@ function renderShelves() {
   }
 }
 
+// ---------------- Series (auto-detected from title numbering) ----------------
+// A book only participates if its title literally ends in a number (after
+// optional trailing whitespace) — "MHA Ch.9" -> base "MHA Ch." / number 9.
+// Titles that don't end in a number (most one-off books) simply never match,
+// so nothing needs to opt in or out by hand.
+function seriesKeyAndNumber(title) {
+  const m = String(title).match(/^(.*?)(\d+)\s*$/);
+  if (!m) return null;
+  return { key: m[1].trim().toLowerCase(), base: m[1].trim(), number: parseInt(m[2], 10) };
+}
+
+function detectSeries(bks) {
+  const groups = new Map();
+  bks.forEach(b => {
+    const parsed = seriesKeyAndNumber(b.title);
+    if (!parsed) return;
+    if (!groups.has(parsed.key)) groups.set(parsed.key, { base: parsed.base, entries: [] });
+    groups.get(parsed.key).entries.push({ book: b, number: parsed.number });
+  });
+  const series = [];
+  groups.forEach(g => {
+    if (g.entries.length < 2) return; // a "series" of one book isn't a series
+    g.entries.sort((a, b) => a.number - b.number);
+    series.push({ name: g.base, books: g.entries.map(e => e.book) });
+  });
+  series.sort((a, b) => naturalCompare(a.name, b.name));
+  return series;
+}
+
+function createSeriesCard(series) {
+  const card = document.createElement('div');
+  card.className = 'card';
+  card.innerHTML = `
+    <img class="card-cover" src="${series.books[0].coverImage}" alt="">
+    <div class="card-title">${escapeHtml(series.name)}</div>
+    <div class="card-subtitle">${series.books.length} books</div>
+  `;
+  card.addEventListener('click', () => openGridPage(series.name, series.books));
+  return card;
+}
+
+function renderSeriesSection() {
+  const row = document.querySelector('#section-series .shelf-row');
+  const track = document.querySelector('#section-series .shelf-scrollbar');
+  const thumb = track ? track.querySelector('.shelf-scrollbar-thumb') : null;
+  row.innerHTML = '';
+  detectSeries(books).forEach(s => row.appendChild(createSeriesCard(s)));
+  updateShelfScrollbarEls(row, track, thumb);
+}
+
+// ---------------- Tags page ----------------
+function renderTagsPage() {
+  const container = document.getElementById('tags-page-body');
+  container.innerHTML = '';
+  const tagMap = new Map();
+  books.forEach(b => (b.tags || []).forEach(tag => {
+    if (!tagMap.has(tag)) tagMap.set(tag, []);
+    tagMap.get(tag).push(b);
+  }));
+
+  if (tagMap.size === 0) {
+    container.innerHTML = '<p class="tags-empty-message">Add tags to your books from their detail page to see them organized here.</p>';
+    return;
+  }
+
+  [...tagMap.keys()].sort((a, b) => naturalCompare(a, b)).forEach(tag => {
+    const list = byTitle(tagMap.get(tag));
+    const shelf = document.createElement('div');
+    shelf.className = 'shelf';
+    shelf.innerHTML = `
+      <div class="shelf-header">
+        <h2 class="shelf-title">${escapeHtml(tag)}</h2>
+        ${list.length > SHELF_CAP ? '<button class="view-all-btn tag-view-all-btn">View All</button>' : ''}
+      </div>
+      <div class="shelf-row"></div>
+      <div class="shelf-scrollbar" hidden><div class="shelf-scrollbar-thumb"></div></div>
+    `;
+    const row = shelf.querySelector('.shelf-row');
+    list.slice(0, SHELF_CAP).forEach(book => row.appendChild(createCard(book)));
+    const viewAllBtn = shelf.querySelector('.tag-view-all-btn');
+    if (viewAllBtn) viewAllBtn.addEventListener('click', () => openGridPage(tag, list));
+    container.appendChild(shelf);
+
+    const track = shelf.querySelector('.shelf-scrollbar');
+    const thumb = shelf.querySelector('.shelf-scrollbar-thumb');
+    wireShelfScrollbarEls(row, track, thumb);
+    updateShelfScrollbarEls(row, track, thumb);
+  });
+}
+
+document.getElementById('nav-tags').addEventListener('click', async () => {
+  showLoading();
+  renderTagsPage();
+  switchView('view-tags');
+  await hideLoading();
+});
+
 // ---------------- Shelf scrollbars ----------------
 // The native scrollbar on each shelf-row is hidden (see CSS) in favor of this
 // always-visible, draggable indicator, so people can see there's more to
 // scroll through without hovering/guessing, and can jump around directly.
-function updateShelfScrollbar(sectionId) {
-  const row = document.querySelector(`#${sectionId} .shelf-row`);
-  const track = document.querySelector(`#${sectionId} .shelf-scrollbar`);
-  const thumb = track ? track.querySelector('.shelf-scrollbar-thumb') : null;
+// Element-based (rather than id-based) so it works equally for the static
+// home shelves and the shelves built on the fly for the Tags page.
+function updateShelfScrollbarEls(row, track, thumb) {
   if (!row || !track || !thumb) return;
   const overflowing = row.scrollWidth > row.clientWidth + 1;
   track.hidden = !overflowing;
@@ -354,61 +452,76 @@ function updateShelfScrollbar(sectionId) {
   thumb.style.left = thumbLeftPct + '%';
 }
 
-function setupShelfScrollbars() {
-  Object.keys(SECTION_CONFIG).forEach(id => {
-    const row = document.querySelector(`#${id} .shelf-row`);
-    const track = document.querySelector(`#${id} .shelf-scrollbar`);
-    const thumb = track ? track.querySelector('.shelf-scrollbar-thumb') : null;
-    if (!row || !track || !thumb) return;
+function updateShelfScrollbar(sectionId) {
+  const row = document.querySelector(`#${sectionId} .shelf-row`);
+  const track = document.querySelector(`#${sectionId} .shelf-scrollbar`);
+  const thumb = track ? track.querySelector('.shelf-scrollbar-thumb') : null;
+  updateShelfScrollbarEls(row, track, thumb);
+}
 
-    row.addEventListener('scroll', () => updateShelfScrollbar(id));
+function wireShelfScrollbarEls(row, track, thumb) {
+  if (!row || !track || !thumb) return;
+  row.addEventListener('scroll', () => updateShelfScrollbarEls(row, track, thumb));
 
-    let dragging = false;
-    let dragStartX = 0;
-    let dragStartScrollLeft = 0;
+  let dragging = false;
+  let dragStartX = 0;
+  let dragStartScrollLeft = 0;
 
-    thumb.addEventListener('pointerdown', (e) => {
-      dragging = true;
-      dragStartX = e.clientX;
-      dragStartScrollLeft = row.scrollLeft;
-      thumb.setPointerCapture(e.pointerId);
-      e.preventDefault();
-    });
-    thumb.addEventListener('pointermove', (e) => {
-      if (!dragging) return;
-      const draggableTrack = Math.max(track.clientWidth - thumb.offsetWidth, 1);
-      const scrollableDist = row.scrollWidth - row.clientWidth;
-      const deltaScroll = ((e.clientX - dragStartX) / draggableTrack) * scrollableDist;
-      row.scrollLeft = Math.max(0, Math.min(scrollableDist, dragStartScrollLeft + deltaScroll));
-    });
-    thumb.addEventListener('pointerup', () => { dragging = false; });
-    thumb.addEventListener('pointercancel', () => { dragging = false; });
-
-    track.addEventListener('click', (e) => {
-      if (e.target === thumb) return;
-      const rect = track.getBoundingClientRect();
-      const scrollableDist = row.scrollWidth - row.clientWidth;
-      row.scrollLeft = ((e.clientX - rect.left) / rect.width) * scrollableDist;
-    });
+  thumb.addEventListener('pointerdown', (e) => {
+    dragging = true;
+    dragStartX = e.clientX;
+    dragStartScrollLeft = row.scrollLeft;
+    thumb.setPointerCapture(e.pointerId);
+    e.preventDefault();
   });
+  thumb.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    const draggableTrack = Math.max(track.clientWidth - thumb.offsetWidth, 1);
+    const scrollableDist = row.scrollWidth - row.clientWidth;
+    const deltaScroll = ((e.clientX - dragStartX) / draggableTrack) * scrollableDist;
+    row.scrollLeft = Math.max(0, Math.min(scrollableDist, dragStartScrollLeft + deltaScroll));
+  });
+  thumb.addEventListener('pointerup', () => { dragging = false; });
+  thumb.addEventListener('pointercancel', () => { dragging = false; });
 
-  window.addEventListener('resize', () => {
-    Object.keys(SECTION_CONFIG).forEach(id => updateShelfScrollbar(id));
+  track.addEventListener('click', (e) => {
+    if (e.target === thumb) return;
+    const rect = track.getBoundingClientRect();
+    const scrollableDist = row.scrollWidth - row.clientWidth;
+    row.scrollLeft = ((e.clientX - rect.left) / rect.width) * scrollableDist;
   });
 }
 
-// ---------------- Section "View All" page ----------------
-document.querySelectorAll('.view-all-btn').forEach(btn => {
-  btn.addEventListener('click', async () => {
+function setupShelfScrollbars() {
+  const ids = [...Object.keys(SECTION_CONFIG), 'section-series'];
+  ids.forEach(id => {
+    const row = document.querySelector(`#${id} .shelf-row`);
+    const track = document.querySelector(`#${id} .shelf-scrollbar`);
+    const thumb = track ? track.querySelector('.shelf-scrollbar-thumb') : null;
+    wireShelfScrollbarEls(row, track, thumb);
+  });
+
+  window.addEventListener('resize', () => {
+    ids.forEach(id => updateShelfScrollbar(id));
+  });
+}
+
+// ---------------- Section "View All" / grid page (shared by shelf View All
+// buttons, Series detail, and Tags View All) ----------------
+async function openGridPage(title, list) {
+  showLoading();
+  const grid = document.getElementById('section-all-grid');
+  grid.innerHTML = '';
+  list.forEach(book => grid.appendChild(createCard(book)));
+  document.getElementById('section-all-title').textContent = title;
+  switchView('view-section-all');
+  await hideLoading();
+}
+
+document.querySelectorAll('#view-home .view-all-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
     const cfg = SECTION_CONFIG[btn.dataset.viewAll];
-    if (!cfg) return;
-    showLoading();
-    const grid = document.getElementById('section-all-grid');
-    grid.innerHTML = '';
-    cfg.getList(books).forEach(book => grid.appendChild(createCard(book)));
-    document.getElementById('section-all-title').textContent = cfg.title;
-    switchView('view-section-all');
-    await hideLoading();
+    if (cfg) openGridPage(cfg.title, cfg.getList(books));
   });
 });
 
@@ -519,7 +632,7 @@ async function handleFiles(fileList) {
       await InkDB.addBook({
         title, format, fileBlob: file, coverImage: cover,
         addedDate: Date.now(), lastOpened: null, favorite: false, finished: false,
-        progress: 0, currentLocation: null, readingOrientation: null
+        progress: 0, currentLocation: null, readingOrientation: null, tags: []
       });
     } catch (err) {
       console.error('Failed to add book', file.name, err);
@@ -542,6 +655,16 @@ els['file-input'].addEventListener('change', (e) => handleFiles(e.target.files))
 els['dropzone'].addEventListener('drop', (e) => handleFiles(e.dataTransfer.files));
 
 // ---------------- Detail view ----------------
+function renderTagChips(tags) {
+  els['detail-tags-list'].innerHTML = '';
+  (tags || []).forEach(tag => {
+    const chip = document.createElement('span');
+    chip.className = 'tag-chip';
+    chip.innerHTML = `${escapeHtml(tag)} <button class="tag-chip-remove" data-tag="${escapeHtml(tag)}"><svg class="icon"><use href="#icon-close"/></svg></button>`;
+    els['detail-tags-list'].appendChild(chip);
+  });
+}
+
 async function openDetail(id) {
   showLoading();
   const book = await InkDB.getBook(id);
@@ -549,6 +672,7 @@ async function openDetail(id) {
   currentDetailBookId = id;
   els['detail-cover'].src = book.coverImage;
   els['detail-title'].textContent = book.title;
+  els['detail-rename-row'].hidden = true;
   els['detail-meta'].textContent = `${book.format.toUpperCase()} · Added ${new Date(book.addedDate).toLocaleDateString()}`;
   if (book.finished) els['detail-progress'].textContent = 'Finished';
   else if (book.progress > 0) els['detail-progress'].textContent = `${Math.round(book.progress * 100)}% read`;
@@ -556,9 +680,115 @@ async function openDetail(id) {
   els['detail-favorite'].classList.toggle('is-active', !!book.favorite);
   els['detail-favorite'].textContent = book.favorite ? 'Favorited' : 'Favorite';
   els['detail-start'].textContent = (book.progress > 0 && !book.finished) ? 'Continue Reading' : 'Start Reading';
+  renderTagChips(book.tags);
   switchView('view-detail');
   await hideLoading();
 }
+
+// ---------------- Rename (Detail page only — see per-book Rename button) ----------------
+els['detail-rename-btn'].addEventListener('click', () => {
+  els['detail-rename-input'].value = els['detail-title'].textContent;
+  els['detail-rename-row'].hidden = false;
+  els['detail-rename-input'].focus();
+  els['detail-rename-input'].select();
+});
+
+document.getElementById('detail-rename-cancel').addEventListener('click', () => {
+  els['detail-rename-row'].hidden = true;
+});
+
+document.getElementById('detail-rename-save').addEventListener('click', async () => {
+  const newTitle = els['detail-rename-input'].value.trim();
+  if (!newTitle) return;
+  await InkDB.updateBook(currentDetailBookId, { title: newTitle });
+  els['detail-title'].textContent = newTitle;
+  els['detail-rename-row'].hidden = true;
+  refreshBooks();
+});
+els['detail-rename-input'].addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('detail-rename-save').click();
+  if (e.key === 'Escape') els['detail-rename-row'].hidden = true;
+});
+
+// ---------------- Tags ----------------
+async function addTagToCurrentBook() {
+  const tag = els['tag-add-input'].value.trim();
+  if (!tag) return;
+  const book = await InkDB.getBook(currentDetailBookId);
+  if (!book) return;
+  const tags = book.tags || [];
+  if (!tags.some(t => t.toLowerCase() === tag.toLowerCase())) tags.push(tag);
+  const updated = await InkDB.updateBook(currentDetailBookId, { tags });
+  renderTagChips(updated.tags);
+  els['tag-add-input'].value = '';
+}
+document.getElementById('tag-add-btn').addEventListener('click', addTagToCurrentBook);
+els['tag-add-input'].addEventListener('keydown', (e) => { if (e.key === 'Enter') addTagToCurrentBook(); });
+
+els['detail-tags-list'].addEventListener('click', async (e) => {
+  const btn = e.target.closest('.tag-chip-remove');
+  if (!btn) return;
+  const book = await InkDB.getBook(currentDetailBookId);
+  if (!book) return;
+  const tags = (book.tags || []).filter(t => t !== btn.dataset.tag);
+  const updated = await InkDB.updateBook(currentDetailBookId, { tags });
+  renderTagChips(updated.tags);
+});
+
+// ---------------- Custom cover art ----------------
+function loadImageFile(file) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = URL.createObjectURL(file);
+  });
+}
+
+async function cropImageToCoverDataURL(file) {
+  const img = await loadImageFile(file);
+  const W = 320, H = 452;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const dstRatio = W / H;
+  const srcRatio = img.width / img.height;
+  let sx, sy, sw, sh;
+  if (srcRatio > dstRatio) {
+    sh = img.height;
+    sw = sh * dstRatio;
+    sx = (img.width - sw) / 2;
+    sy = 0;
+  } else {
+    sw = img.width;
+    sh = sw / dstRatio;
+    sx = 0;
+    sy = (img.height - sh) / 2;
+  }
+  ctx.drawImage(img, sx, sy, sw, sh, 0, 0, W, H);
+  URL.revokeObjectURL(img.src);
+  return canvas.toDataURL('image/jpeg', 0.88);
+}
+
+document.getElementById('detail-change-cover-btn').addEventListener('click', () =>
+  document.getElementById('cover-file-input').click());
+
+document.getElementById('cover-file-input').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  e.target.value = '';
+  if (!file || !file.type.startsWith('image/')) return;
+  showLoading();
+  try {
+    const dataUrl = await cropImageToCoverDataURL(file);
+    await InkDB.updateBook(currentDetailBookId, { coverImage: dataUrl });
+    els['detail-cover'].src = dataUrl;
+    await refreshBooks();
+  } catch (err) {
+    console.error('Cover update failed', err);
+    alert('Could not use that image as a cover.');
+  }
+  await hideLoading();
+});
 
 document.getElementById('detail-start').addEventListener('click', () => startReading(currentDetailBookId));
 
@@ -771,7 +1001,7 @@ async function exportLibrary() {
         title: book.title, format: book.format, coverImage: book.coverImage,
         addedDate: book.addedDate, lastOpened: book.lastOpened, favorite: book.favorite,
         finished: book.finished, progress: book.progress, currentLocation: book.currentLocation,
-        readingOrientation: book.readingOrientation, file: fileName
+        readingOrientation: book.readingOrientation, tags: book.tags || [], file: fileName
       });
     }
     zip.file('manifest.json', JSON.stringify(manifest, null, 2));
@@ -807,7 +1037,8 @@ async function importLibrary(file) {
         title: entry.title, format: entry.format, fileBlob, coverImage: entry.coverImage,
         addedDate: entry.addedDate || Date.now(), lastOpened: entry.lastOpened || null,
         favorite: !!entry.favorite, finished: !!entry.finished, progress: entry.progress || 0,
-        currentLocation: entry.currentLocation || null, readingOrientation: entry.readingOrientation || null
+        currentLocation: entry.currentLocation || null, readingOrientation: entry.readingOrientation || null,
+        tags: Array.isArray(entry.tags) ? entry.tags : []
       });
       imported++;
     }
@@ -849,8 +1080,8 @@ async function requestPersistentStorage() {
 }
 
 // ---------------- Download page (website only) ----------------
-const RELEASE_VERSION = '1.3.0';
-const RELEASE_BASE = 'https://github.com/mrdubya5995-star/INKFORGE/releases/download/v1.3.0/';
+const RELEASE_VERSION = '1.4.0';
+const RELEASE_BASE = 'https://github.com/mrdubya5995-star/INKFORGE/releases/download/v1.4.0/';
 const DOWNLOAD_LINKS = {
   mac: { url: RELEASE_BASE + 'InkForge-macOS.dmg', size: '97.2 MB' },
   windows: { url: RELEASE_BASE + 'InkForge-Setup-Windows.exe', size: '80.6 MB' },
